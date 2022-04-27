@@ -15,7 +15,7 @@ class GenerationPayload(BaseModel):
 
 class ImageGenerationResult(BaseModel):
     """
-    summay
+    Image Generation Result about user Request. Result is encoded by Base64 format.
     """
 
     text_promt: str
