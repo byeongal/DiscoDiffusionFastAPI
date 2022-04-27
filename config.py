@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_name: str = "Disco Diffusion Fast API"
     app_version: str = "0.1.0-dev"
     api_prefix: str = "/api"
+    is_debug: bool = True
 
 
 settings = Settings()
