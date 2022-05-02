@@ -8,6 +8,7 @@ from dependencies.guided_diffusion.guided_diffusion.script_util import create_mo
 
 from config import clip_model_settings, torch_model_settings, diffusion_model_settings
 from constants import DiffusionModelEnum
+from disco_diffusion.models import SecondaryDiffusionImageNet2
 
 
 def load_clip_model() -> List[clip.model.CLIP]:
@@ -56,7 +57,7 @@ def load_clip_model() -> List[clip.model.CLIP]:
     return clip_models
 
 
-def load_diffusion_model() -> List:
+def load_diffusion_model() -> torch.nn.Module:
     """
     Return Diffusion Model
     """
@@ -97,3 +98,19 @@ def load_diffusion_model() -> List:
     model.load_state_dict(torch.load(f"./pytorch_models/{diffusion_model}.pt", map_location="cpu"))
     model.requires_grad_(False).eval().to(torch_model_settings.device)
     return model
+
+
+def load_secondary_diffusion_model() -> torch.nn.Module:
+    """
+    Return Secondary Diffusion Model
+    """
+    logger.info("Load Secondary Diffusion Model")
+    if diffusion_model_settings.use_secondary_model:
+        secondary_model = SecondaryDiffusionImageNet2()
+        secondary_model.load_state_dict(
+            torch.load(f"./pytorch_models/secondary_model_imagenet_2.pth", map_location="cpu")
+        )
+        secondary_model.eval().requires_grad_(False).to(torch_model_settings.device)
+        return secondary_model
+    else:
+        return None
