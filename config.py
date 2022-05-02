@@ -1,3 +1,5 @@
+from typing import Union
+
 import torch
 from pydantic import BaseSettings
 from constants import DiffusionModelEnum, DiffusionSamplingModeEnum
@@ -19,8 +21,20 @@ class TorchModelSettings(BaseSettings):
     Settings about Torch Model
     """
 
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: Union[str, torch.device] = "cuda" if torch.cuda.is_available() else "cpu"
     use_fp16: bool = True
+
+
+class DiffusionModelSettings(BaseSettings):
+    """
+    Settings about Diffusion
+    """
+
+    diffusion_model: DiffusionModelEnum = (
+        DiffusionModelEnum.DIFFUSION_UNCOND_FINTETUNE_008100_512_BY_512
+    )
+    use_secondary_model: bool = True
+    diffusion_sampling_mode: DiffusionSamplingModeEnum = DiffusionSamplingModeEnum.DDIM
 
 
 class ClipModelSettings(BaseSettings):
@@ -40,4 +54,5 @@ class ClipModelSettings(BaseSettings):
 
 app_settings = AppSettings()
 torch_model_settings = TorchModelSettings()
+diffusion_model_settings = DiffusionModelSettings()
 clip_model_settings = ClipModelSettings()
