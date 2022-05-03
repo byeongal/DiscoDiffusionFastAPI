@@ -212,6 +212,7 @@ def load_midas_depth_model() -> Dict:
         midas_model = midas_model.to(memory_format=torch.channels_last)
         midas_model = midas_model.half()
 
+    midas_model.to(torch_model_settings.device)
     return {
         "mida_model": midas_model,
         "midas_transform": midas_transform,
