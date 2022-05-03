@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from loguru import logger
 from utils import (
     load_clip_model,
+    load_lips,
     load_diffusion_model,
     load_secondary_diffusion_model,
     load_midas_depth_model,
@@ -13,6 +14,7 @@ from utils import (
 
 def _startup_model(app: FastAPI) -> None:
     app.state.clip_models = load_clip_model()
+    app.state.lpips_model = load_lips()
     app.state.diffusion_model = load_diffusion_model()
     app.state.secondary_diffusion_model = load_secondary_diffusion_model()
     app.state.midas_depth_model = load_midas_depth_model()

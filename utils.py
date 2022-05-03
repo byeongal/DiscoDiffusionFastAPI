@@ -4,6 +4,7 @@ import torch
 import clip
 import cv2
 import gc
+import lpips
 import torchvision.transforms as T
 from loguru import logger
 
@@ -74,11 +75,21 @@ def load_clip_model() -> List[clip.model.CLIP]:
     return clip_models
 
 
+def load_lips() -> torch.nn.Module:
+    """
+    Return LIPS
+    """
+    logger.info("Load LIPS")
+    device = torch_model_settings.device
+    return lpips.LPIPS(net="vgg").to(device)
+
+
 def load_diffusion_model() -> torch.nn.Module:
     """
     Return Diffusion Model
     """
     logger.info("Load Diffusion Model")
+    device = torch_model_settings.device
     diffusion_model = diffusion_model_settings.diffusion_model.value
     if diffusion_model == DiffusionModelEnum.DIFFUSION_UNCOND_FINTETUNE_008100_512_BY_512.value:
         model = create_model(
@@ -113,7 +124,7 @@ def load_diffusion_model() -> torch.nn.Module:
         raise ValueError(f"{diffusion_model} is not supported")
     logger.info(f"Load {diffusion_model} Model")
     model.load_state_dict(torch.load(f"./pytorch_models/{diffusion_model}.pt", map_location="cpu"))
-    model.requires_grad_(False).eval().to(torch_model_settings.device)
+    model.requires_grad_(False).eval().to(device)
     for name, param in model.named_parameters():
         if "qkv" in name or "norm" in name or "proj" in name:
             param.requires_grad_()
@@ -130,7 +141,7 @@ def load_secondary_diffusion_model() -> torch.nn.Module:
     if diffusion_model_settings.use_secondary_model:
         secondary_model = SecondaryDiffusionImageNet2()
         secondary_model.load_state_dict(
-            torch.load(f"./pytorch_models/secondary_model_imagenet_2.pt", map_location="cpu")
+            torch.load("./pytorch_models/secondary_model_imagenet_2.pt", map_location="cpu")
         )
         secondary_model.eval().requires_grad_(False).to(torch_model_settings.device)
         return secondary_model
