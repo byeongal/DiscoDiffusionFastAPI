@@ -3,6 +3,7 @@ from typing import List, Dict
 import torch
 import clip
 import cv2
+import gc
 import torchvision.transforms as T
 from loguru import logger
 
@@ -226,3 +227,13 @@ def load_midas_depth_model() -> Dict:
         "resize_mode": resize_mode,
         "normalization": normalization,
     }
+
+
+def clear_memory() -> None:
+    """
+    Function to clear memory and gpu memory
+    """
+    logger.info("`clear_memory` was called")
+    gc.collect()
+    if torch_model_settings.device == torch.device("cuda"):
+        torch.cuda.empty_cache()

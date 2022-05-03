@@ -7,6 +7,7 @@ from utils import (
     load_diffusion_model,
     load_secondary_diffusion_model,
     load_midas_depth_model,
+    clear_memory,
 )
 
 
@@ -15,6 +16,7 @@ def _startup_model(app: FastAPI) -> None:
     app.state.diffusion_model = load_diffusion_model()
     app.state.secondary_diffusion_model = load_secondary_diffusion_model()
     app.state.midas_depth_model = load_midas_depth_model()
+    clear_memory()
 
 
 def _shutdown_model(app: FastAPI) -> None:
