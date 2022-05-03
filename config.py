@@ -27,7 +27,7 @@ class TorchModelSettings(BaseSettings):
 
 class DiffusionModelSettings(BaseSettings):
     """
-    Settings about Diffusion
+    Settings about Diffusion Model
     """
 
     diffusion_model: DiffusionModelEnum = (

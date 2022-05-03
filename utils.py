@@ -11,7 +11,11 @@ import torchvision.transforms as T
 
 from loguru import logger
 
-from dependencies.guided_diffusion.guided_diffusion.script_util import create_model
+from dependencies.guided_diffusion.guided_diffusion.gaussian_diffusion import GaussianDiffusion
+from dependencies.guided_diffusion.guided_diffusion.script_util import (
+    create_model,
+    create_gaussian_diffusion,
+)
 from dependencies.midas.dpt_depth import DPTDepthModel
 from dependencies.midas.midas_net import MidasNet
 from dependencies.midas.midas_net_custom import MidasNet_small
@@ -134,6 +138,24 @@ def load_diffusion_model() -> torch.nn.Module:
     if torch_model_settings.use_fp16:
         model.convert_to_fp16()
     return model
+
+
+def load_diffusion() -> GaussianDiffusion:
+    """
+    Return diffusion
+    """
+    logger.info("Load Diffusion")
+    diffusion = create_gaussian_diffusion(
+        steps=1000,
+        learn_sigma=True,
+        noise_schedule="linear",
+        use_kl=False,
+        predict_xstart=False,
+        rescale_timesteps=True,
+        rescale_learned_sigmas=False,
+        timestep_respacing="ddim250",
+    )
+    return diffusion
 
 
 def load_secondary_diffusion_model() -> torch.nn.Module:
