@@ -1,11 +1,14 @@
+import gc
+import random
 from typing import List, Dict
 
 import torch
 import clip
 import cv2
-import gc
 import lpips
+import numpy as np
 import torchvision.transforms as T
+
 from loguru import logger
 
 from dependencies.guided_diffusion.guided_diffusion.script_util import create_model
@@ -248,3 +251,16 @@ def clear_memory() -> None:
     gc.collect()
     if torch_model_settings.device == torch.device("cuda"):
         torch.cuda.empty_cache()
+
+
+def set_seed(seed: int) -> None:
+    """
+    Set random seed.
+    Args:
+        seed (int): seed value
+    """
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
