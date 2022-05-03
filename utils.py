@@ -113,6 +113,11 @@ def load_diffusion_model() -> torch.nn.Module:
     logger.info(f"Load {diffusion_model} Model")
     model.load_state_dict(torch.load(f"./pytorch_models/{diffusion_model}.pt", map_location="cpu"))
     model.requires_grad_(False).eval().to(torch_model_settings.device)
+    for name, param in model.named_parameters():
+        if "qkv" in name or "norm" in name or "proj" in name:
+            param.requires_grad_()
+    if torch_model_settings.use_fp16:
+        model.convert_to_fp16()
     return model
 
 
@@ -124,7 +129,7 @@ def load_secondary_diffusion_model() -> torch.nn.Module:
     if diffusion_model_settings.use_secondary_model:
         secondary_model = SecondaryDiffusionImageNet2()
         secondary_model.load_state_dict(
-            torch.load(f"./pytorch_models/secondary_model_imagenet_2.pth", map_location="cpu")
+            torch.load(f"./pytorch_models/secondary_model_imagenet_2.pt", map_location="cpu")
         )
         secondary_model.eval().requires_grad_(False).to(torch_model_settings.device)
         return secondary_model
