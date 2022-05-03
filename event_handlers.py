@@ -2,17 +2,26 @@ from typing import Callable
 
 from fastapi import FastAPI
 from loguru import logger
-from utils import load_clip_model, load_diffusion_model, load_secondary_diffusion_model
+from utils import (
+    load_clip_model,
+    load_diffusion_model,
+    load_secondary_diffusion_model,
+    load_midas_depth_model,
+)
 
 
 def _startup_model(app: FastAPI) -> None:
     app.state.clip_models = load_clip_model()
     app.state.diffusion_model = load_diffusion_model()
     app.state.secondary_diffusion_model = load_secondary_diffusion_model()
+    app.state.midas_depth_model = load_midas_depth_model()
 
 
 def _shutdown_model(app: FastAPI) -> None:
-    app.state.clip_models = None
+    del app.state.clip_models
+    del app.state.diffusion_model
+    del app.state.secondary_diffusion_model
+    del app.state.midas_depth_model
 
 
 def start_app_handler(app: FastAPI) -> Callable:

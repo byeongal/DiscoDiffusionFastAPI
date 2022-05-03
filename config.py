@@ -2,7 +2,7 @@ from typing import Union
 
 import torch
 from pydantic import BaseSettings
-from constants import DiffusionModelEnum, DiffusionSamplingModeEnum
+from constants import DiffusionModelEnum, DiffusionSamplingModeEnum, MidasModelTypeEnum
 
 
 class AppSettings(BaseSettings):
@@ -52,7 +52,16 @@ class ClipModelSettings(BaseSettings):
     RN50x64: bool = False
 
 
+class MidasDepthModelSettings(BaseSettings):
+    """
+    Settings about Midas Depth Model
+    """
+
+    midas_model_type: MidasModelTypeEnum = MidasModelTypeEnum.DPT_LARGE
+
+
 app_settings = AppSettings()
 torch_model_settings = TorchModelSettings()
 diffusion_model_settings = DiffusionModelSettings()
 clip_model_settings = ClipModelSettings()
+midas_depth_model_settings = MidasDepthModelSettings()

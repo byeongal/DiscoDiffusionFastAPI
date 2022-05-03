@@ -27,3 +27,15 @@ class DiffusionSamplingModeEnum(Enum):
 
     PLMS = "plms"
     DDIM = "ddim"
+
+
+class MidasModelTypeEnum(Enum):
+    """
+    Possible values for the `midas_model_type`.
+    """
+
+    MIDAS_V21_SMALL = "midas_v21_small"
+    MIDAS_V21 = "midas_v21"
+    DPT_LARGE = "dpt_large"
+    DPT_HYBRID = "dpt_hybrid"
+    DPT_HYBRID_NYU = "dpt_hybrid_nyu"
