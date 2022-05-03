@@ -207,6 +207,11 @@ def load_midas_depth_model() -> Dict:
             PrepareForNet(),
         ]
     )
+
+    if torch_model_settings.use_fp16 and torch_model_settings.device == torch.device("cuda"):
+        midas_model = midas_model.to(memory_format=torch.channels_last)
+        midas_model = midas_model.half()
+
     return {
         "mida_model": midas_model,
         "midas_transform": midas_transform,
