@@ -3,6 +3,7 @@ from typing import Callable
 from fastapi import FastAPI
 from loguru import logger
 from utils import (
+    get_normalize,
     load_clip_model,
     load_diffusion,
     load_lips,
@@ -14,20 +15,24 @@ from utils import (
 
 
 def _startup_model(app: FastAPI) -> None:
+    app.state.normalize = get_normalize()
     app.state.clip_models = load_clip_model()
     app.state.lpips_model = load_lips()
     app.state.diffusion_model = load_diffusion_model()
     app.state.diffusion = load_diffusion()
     app.state.secondary_diffusion_model = load_secondary_diffusion_model()
-    app.state.midas_depth_model = load_midas_depth_model()
+    # app.state.midas_depth_model = load_midas_depth_model()
     clear_memory()
 
 
 def _shutdown_model(app: FastAPI) -> None:
+    del app.state.normalize
     del app.state.clip_models
+    del app.state.lpips_model
     del app.state.diffusion_model
+    del app.state.diffusion
     del app.state.secondary_diffusion_model
-    del app.state.midas_depth_model
+    # del app.state.midas_depth_model
 
 
 def start_app_handler(app: FastAPI) -> Callable:

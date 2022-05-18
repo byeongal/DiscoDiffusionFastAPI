@@ -20,3 +20,4 @@ class ImageGenerationResult(BaseModel):
 
     text_promt: str
     result: str
+    seed: int

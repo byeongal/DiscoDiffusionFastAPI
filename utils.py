@@ -1,12 +1,13 @@
 import gc
 import random
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import torch
 import clip
 import cv2
 import lpips
 import numpy as np
+import pandas as pd
 import torchvision.transforms as T
 
 from loguru import logger
@@ -34,6 +35,12 @@ from config import (
 )
 from constants import DiffusionModelEnum, MidasModelTypeEnum
 from diffusion.models import SecondaryDiffusionImageNet2
+
+
+def get_normalize():
+    return T.Normalize(
+        mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]
+    )
 
 
 def load_clip_model() -> List[clip.model.CLIP]:
@@ -98,19 +105,26 @@ def load_diffusion_model() -> torch.nn.Module:
     logger.info("Load Diffusion Model")
     device = torch_model_settings.device
     diffusion_model = diffusion_model_settings.diffusion_model.value
+    # model, diffusion = create_model_and_diffusion(**model_config)
+
     if diffusion_model == DiffusionModelEnum.DIFFUSION_UNCOND_FINTETUNE_008100_512_BY_512.value:
         model = create_model(
             image_size=512,
             num_channels=256,
             num_res_blocks=2,
+            channel_mult="",
             learn_sigma=True,
             class_cond=False,
             use_checkpoint=True,
             attention_resolutions="32, 16, 8",
+            num_heads=4,
             num_head_channels=64,
+            num_heads_upsample=-1,
             use_scale_shift_norm=True,
+            dropout=0.0,
             resblock_updown=True,
-            use_fp16=torch_model_settings.use_fp16,
+            use_fp16=True,
+            use_new_attention_order=False,
         )
     elif diffusion_model == DiffusionModelEnum.DIFFUSION_UNCOND_256_BY_256.value:
         model = create_model(
@@ -286,3 +300,30 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def split_prompts(prompts: Dict[int, List[str]], max_frames: int):
+    """_summary_
+
+    Args:
+        prompts (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    prompt_series = pd.Series([np.nan for a in range(max_frames)])
+    for i, prompt in prompts.items():
+        prompt_series[i] = prompt
+    # prompt_series = prompt_series.astype(str)
+    prompt_series = prompt_series.ffill().bfill()
+    return prompt_series
+
+
+def parse_prompt(prompt: str) -> Tuple[str, float]:
+    if prompt.startswith("http://") or prompt.startswith("https://"):
+        vals = prompt.rsplit(":", 2)
+        vals = [vals[0] + ":" + vals[1], *vals[2:]]
+    else:
+        vals = prompt.rsplit(":", 1)
+    vals = vals + ["", "1"][len(vals) :]
+    return vals[0], float(vals[1])

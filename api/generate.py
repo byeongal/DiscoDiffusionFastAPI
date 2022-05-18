@@ -1,13 +1,31 @@
+import random
 import base64
-from fastapi import APIRouter
+from tkinter.messagebox import NO
+from loguru import logger
+
+import torch
+import clip
+from fastapi import APIRouter, Request
+import torchvision.transforms.functional as TF
 
 from models.generation import GenerationPayload, ImageGenerationResult
+from utils import clear_memory, set_seed, split_prompts, parse_prompt
+
+from config import torch_model_settings, diffusion_model_settings
+from constants import DiffusionSamplingModeEnum
+from diffusion.models import (
+    alpha_sigma_to_t,
+    MakeCutoutsDango,
+    spherical_dist_loss,
+    tv_loss,
+    range_loss,
+)
 
 router = APIRouter()
 
 
 @router.post("/image")
-def generate_image(payload: GenerationPayload) -> ImageGenerationResult:
+async def generate_image(request: Request, payload: GenerationPayload) -> ImageGenerationResult:
     """_summary_
 
     Args:
@@ -16,10 +34,207 @@ def generate_image(payload: GenerationPayload) -> ImageGenerationResult:
     Returns:
         ImageGenerationResult: base64 encoded image
     """
-    text_prompt = payload.text_prompt
-    # Common Computer Logo
-    # pylint: disable=line-too-long
-    data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\\\x00\x00\x00j\x08\x06\x00\x00\x001\xcc6\xe8\x00\x00\x00\tpHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\x00\x01sRGB\x00\xae\xce\x1c\xe9\x00\x00\x00\x04gAMA\x00\x00\xb1\x8f\x0b\xfca\x05\x00\x00\x06\x99IDATx\x01\xed\x9dOR\x1bG\x14\x87_\xf7\x00v9\x1bT`\xaa\xb2\x93O`\xfb\x04\xc1\'\x08^\xa4\n+IY\x9c\x00i\x81\x95d\xa3a\x93\x94`!q\x02+\x0b\x03\xa9,\x8cO\x80s\x02\x9c\x13\xa0]\xaa\xb0]R\xd9\x15c\xfe\xcc\xbct\x8f<\x10\x814\x9a\x19u\xf7t\x0f\xfd\xadT\xd2\xd8T\xfd\x18>\xbd\xd7\xd3\xf3\x86\x80AT\x96\xba\xb3\xb7\xee\x9cW\x80\xd0\xd5\xe0\r\x84=\xf0\xe9zc\xb7\xd0\x01C `\x08\xb5\xd2[7\x08\x1aqv\xf0\x13\xd2A\xf4\xb66v\x16Z`\x00\xda\x07^\xfb\xe1\xed";\x8b\x9f\xb3\xd3\xb9\x18}$\xe9PB\xdd\xdf^\x14~\x07\x8d\xd16\xf0\xdar\xb7\x08\x8e\xf7\x9cic\x11\x12A\xda:kF\xbb\xc0\xfb\x9e\xf6\\\xf6r\x15&\x01I\x0b\x90n\xe9\x16\xbcV\x81?{rT!\xd4\xa9_\xf7tZ\xf4\xd3\x8c\x16\x81sO\xa3O\x9b\x04\xf0\x01H\x81t\xfc3\xef\xf1\xe6\x9f\x0bo c2\r<\xbd\xa7\xd3\x92\xbd\xdf3\t|\xa0\x9e\x16\xa6\x8f\x04\xf8\xc8B\xbf\xebB\x06(\x0f\xfc\xa7\xd2\xbb2\x12\xd2\xcc$\xe8\x01\xb2\xf1\xbb\xb2\xc0\x83z\x1aI]\x9d>\xe2B:L3\x8fTiFz\xe0}}\xf8MV\xa7\x95Ak\xd4\xf8]Z\xe0\x99{:\x05\x08\xd0#>n\xc9\xf4\xbb\x94\xc0\xe3\xb7\xe3\xba"\xcf\xefB\x03\xff\xa5\xd4}\xe0\x11\xaf\xa9\x9f\xa7\xd3\x81l5\x92\xa0S\x15\xa9\x19!\x81\x0bk\xc7\xb5E\x9c\xdf\'\x0e\\|;\xae+b4\x93:p\xf3=\x9d\x16VF\x02\xad4\xb6\x0b\xaf \x05\x89\x03W\xdf\x8e\xebJ:\xcd\xc4\x0e\xfc\xa2\xcc\x03\xd6\xbcX.a\xcb\x04\x00S\xed\xb8\xc1\xc7\n\xfc\xe6x:-\xf1\xfd\x1e\x19\xb8\xbe\xed\xb8\xae\x8c_\x06\x1e\x1ax\xe0i\x8a\xac\x1d\xf7\x97\xc0\x92\x82\xd1~\x1f\x08\xdc\xc4v\\k\x86,\x03_\x04\x1e,\x9b\x06_\x887\xad\xcc\x93\xcd\xa0\xdfIpV\x7f\xe5\xbd\xb4\x9e\x96\x0c\xc2\xeb\x93c\xe71\r\x96Nm\xd8\xf2!\xb0\xc8\xb3\xa6\xfa\xafS\xe7\x07\x04\\\xa2`Q\x06\xfb\xc2\x9c\xb5\x81+\xc6\x06\xae\x18\x1b\xb8bl\xe0\x8a\xb1\x81+\xc6\x06\xae\x18\x1b\xb8bl\xe0\x8aI\x1f\xb8G*\'\x9f>\x16\x1a\xdb\xf3\xc4\xf7\xfd\x15\xd6Fu\xc02\x16R+\xbdCH\nb\xab\xb1s\xb7z\xf5\xedg\xa5\xf7u\x02\xe8\x82e$\xa9\xcep\x1f\xa6\xf6\x86\xbd\xbf\xb1=\xb7\x0e\xfe\xd9=\xf6\xb2\r\x96\xa1\x08wxc\xf7\xeb\x0e\xd3\xcc\n\x80\xb3d5s\x1di_\x9a|\xdfFcg\xfe\x1e\xa2_\xb5\xc1_"\xbdJ\tnX\xc5\xb3G`5\x13\xa0\xa4,\xbc\xd0L\xe0w\x92\xf9\x8dMY\xa2\xb4\x0e\xef\x07?\xf7\xf0&\x97\x91B\x03\xaf\x95\xde\x1f\xfe\xfc}\xf7\xe9\xb8\xe36w\x17\xda\xb7o9\x0f\xd9Ek\x17n\x18\x82\xcfp,\xfa\xe8\xb5Y\xf0\xcf\x83\xbd-\x11\xac\xb7\x0b\xbd\x9bXFJR\n\xbbNJ\xbd\xc3\xda\x93\xf7\xcdq\xc1\x87~\xbf)\x9a\x91\xebp\x82\x15\xa0\xfe~\\\xcd\x04e$\xd7L\x8e\x83W\xf0\xa5y\xa1\x99\xc3\xb5\xef\x8e\xc6\xde\xda\x1dh&\xc7e\xa4\xc2*\x05\x8bt\x9a\x1e\xc4\xf1\xfb@\x19\x99\xb3\xb3=\x83\xe5\xd9/~_~\xeb\x8e;2\x08\x9ei&O~\xcfn=\x9c\x92z\x9222\xd0\x0c!F\x8cY\x8a"\xe3\x0b\x10}\xbf\xb3e\xdd\x83X\x9ay1W5=t-\xae\xf8\x04sR\xb8fb\xf8\x1d<\xba\x05\x06\xa3\xd9%6\xeew\x7f\x9f\xdf\xe2\x029E\xc3k\x9aX$\x846\xe3\x96\x91\xa6\xa1\xf1Ed\x16\xfc\x0c\xbd\x0f9\xc3^\xb5W\x8c\r\\16p\xc5\xd8\xc0\x15c\x03W\x8c\r\\1Z\x07N\x90\xb8c;O\xc3\xd0\xfc\x0c\xc7b\xec\x96\xdf\x10\x0cQJ\xbf\xe5\x8f\xb3\xa4\xab;b\x03\x97\xbaf\xcd\xcfvR\x07\xc7?\x00\x83\x11\x1a\xb8\x92\xadm\x86\x0f]\x10\xae\x14\xbb\xb5-\x9aT\x81\x13\xf4\x17\xa3>\xb7[\xdbF\x93.p\x8an\x9c5k\xbb\xb5\xed:\xe9\xee\x80\xb8\xfc\xe7\x89&\x13\xa7\xb8C\x82o\xfc\xcf\xd5T\xa2\t\x1d\x9e\xacNN\xba\xb5\xcdG\xa7\x95\xb7\xadp\x82\xbe4\xb1\x8c\xd4;\x88\xbd\xf5\x81oms\x9c\xc58\x9a\xc9\xdb\x1d\x15\x13*e\xe8\x7f\x99hd\xe8\xda\xf2Q\x99\x1d_gW\x92\x8bW?cg\xf8\xe2\xe6N\xe1\xafk\xc7S\xdad/\x8d,\x0f%t\x9a\xf1w\xd0r.\xf6\x9c\xc4\xd4Fp<\x90\x1e\x18\x8a\xc4\xd6\xfer\x87U\xa2\xadm\x04^C\x8e\xa1\xd2\xebd\xde\x8e\xc7\xdcA\xdb\xdf\xec3\xff(\xafe$\x02\xbe\xa1\x88|v\xaa\xf4\x1fu\xb1\x836\xaef\xf82\xc1\xd9q\xefo\xc8\x13\xe7\xfez0\xb7\xb0\xb6\xfcO\x11\x9cic\x1e`\xc4\x7fqF\xcdWDx\xed\x10\xbf\xfa\xeb\xf6\xc2\x9b\x81\xc9\x9cQ\x15\x83x\xd2?\x07\xd3\x98\xc0\x99\x16}p\xca\xff\xaf\xb4\x86\xce\x9e\xfd\xd2\x11\xf2\xd6]A\xe9\x95|\x00\xba\x01\x81\xf7\xd0\'\xad\xd3\xcf\x1f\xb6Z{\xf7\x06*\xaa\x91\xd3\x95\x03\xcd\xd0i>+\xbc\x0cJ\x88\xaf\x19\xcd\x03o\x9f|\xfaX\xbd\x1at\xc8\xd8\xf9\xe1A\xf0dz_\x8df \x18\x90{\xf2y\xaa\xd5\xda+\x8c\xac\xb5\xb5\x0c\x9cy\x9a\xe9\xc3\xbd\xda\xa8]%\xf6\x84|\xd5~\x1f\xd5\xad\xf6Gm{\x87\xa0\x0b\xcc\xd3\xacUw7v\xe6cu\xd6\x89\x9e\x01Q/wg\x8fO\xfdUU3Q\x90\xf5\x08\x08\xde\xca\xe6v\x7f\x00:\x1fL<s\xc7\xdf\x97\xf7\xdc\xcdD\x8c\xf4t\x14\xa9\x9er\xa2\xdc\xef\xec\xcf\x15\t\x99\xd5$h\xce\x1e\xeb\x8a\xab\xbcQ\x83\x84L\xf4\x1c\x9f\xb5\x1f\xbb\xdf\xd0s\xaf\xad\xcc\xefY\x13\xd3\xd3QL\x14x\x88Z\xbfgB\x0f<\xe26\xfe\x98\x9b\xf8v\x17!\x81s\xfa\xdd\xea\x0c\x7f\x94A\xaen\x17a\x9ev\x93z:\na\x81\x87\xa8\xaf\xdf%\xc1\xf4\xc1\x96\x8dW\xd2x:\n\xe1\x81\x87\x18\xab\x99!\xed\xb8H\xa4\x05\x1e\x12<t\t\xe8\xaa\x01\xc1\x07e\xde\xc6\xee\x9c\xd4\xd5S\xe9\x81st\xd7\x0c"\xab\xa7\x8f?\xac\x8b\xf2t\x14J\x02\x0f\xe9\x07?\xf3\x12t\xa9\xa7\x05\x94yIQ\x1axH\xe6~\x97\xec\xe9(2\t<$\x83\xd1\xa9\xa9\xdaq\x91d\x1a8G\xa1\xdf#\x97MU\x91y\xe0!k\xa5\xa3\x07\x14\xe9K\xe1\x9a\xc9\xc0\xd3Qh\x13x\x88@\xbf\xf7\x10\xa1\x12w\xd9T\x15\xda\x05\xce\xe1\x9aA:\xf34\xa5\xdf3\xf7t\x14Z\x06\x1e\x92\xd8\xef\x92\xdaq\x91h\x1dxH\xad\xd4\xfd\x16\xd0k\x8d\xd2\x0c"\xb2\x0b\x15S\x15]<\x1d\x85\x11\x81\x87\x0c\xf1\xbb\xb0eSU\x18\x158\xa7\xaf\x99\xdb\xf7\x91\xc0\xec\xe9\xbf\xbdW:z:\x8a\xff\x00\xb7\xbe\xc0\x02\xdd\xaf\x0f\xfe\x00\x00\x00\x00IEND\xaeB`\x82'
-    base64_str = base64.b64encode(data).decode("utf-8")
+    # Values
+    device = torch_model_settings.device
+    diffusion_sampling_mode = diffusion_model_settings.diffusion_sampling_mode.value
 
-    return ImageGenerationResult(text_promt=text_prompt, result=base64_str)
+    skip_steps = 10
+    batch_size = 1
+    side_x = 1280
+    side_y = 768
+    clip_denoised = False
+    randomize_class = True
+    eta = 0.8
+    cutn_batches = 4
+    clip_guidance_scale = 5000
+    tv_scale = 0
+    range_scale = 150
+    sat_scale = 0
+    init_scale = 1000
+    clamp_grad = True
+    clamp_max = 0.05
+    fuzzy_prompt = False
+    rand_mag = 0.05
+
+    cut_overview = [12] * 400 + [4] * 600
+    cut_innercut = [4] * 400 + [12] * 600
+    cut_ic_pow = 1
+    cut_icgray_p = [0.2] * 400 + [0] * 600
+
+    # Models
+    diffusion_model = request.app.state.diffusion_model
+    diffusion = request.app.state.diffusion
+    secondary_diffusion_model = request.app.state.secondary_diffusion_model
+    clip_models = request.app.state.clip_models
+    normalize = request.app.state.normalize
+    lpips_model = request.app.state.lpips_model
+
+    # clip_models = request.app.state.clip_models
+
+    # User Inputs
+    text_prompt = payload.text_prompt
+
+    seed = random.randint(0, 2**32)
+    set_seed(seed)
+    loss_values = []
+    target_embeds, weights = [], []
+    frame_prompt = [text_prompt]
+    model_stats = []
+    for clip_model in clip_models:
+        model_stat = {"clip_model": None, "target_embeds": [], "make_cutouts": None, "weights": []}
+        model_stat["clip_model"] = clip_model
+
+        for prompt in frame_prompt:
+            txt, weight = parse_prompt(prompt)
+            txt = clip_model.encode_text(clip.tokenize(txt).to(device)).float()
+            if fuzzy_prompt:
+                for _ in range(25):
+                    model_stat["target_embeds"].append(
+                        (txt + torch.randn(txt.shape).to(device) * rand_mag).clamp(0, 1)
+                    )
+                    model_stat["weights"].append(weight)
+            else:
+                model_stat["target_embeds"].append(txt)
+                model_stat["weights"].append(weight)
+
+        model_stat["target_embeds"] = torch.cat(model_stat["target_embeds"])
+        model_stat["weights"] = torch.tensor(model_stat["weights"], device=device)
+        if model_stat["weights"].sum().abs() < 1e-3:
+            raise RuntimeError("The weights must not sum to 0.")
+        model_stat["weights"] /= model_stat["weights"].sum().abs()
+        model_stats.append(model_stat)
+    init = None
+    cur_t = None
+
+    def cond_fn(x, t, y=None):
+        with torch.enable_grad():
+            x_is_NaN = False
+            x = x.detach().requires_grad_()
+            n = x.shape[0]
+            if secondary_diffusion_model is not None:
+                alpha = torch.tensor(
+                    diffusion.sqrt_alphas_cumprod[cur_t], device=device, dtype=torch.float32
+                )
+                sigma = torch.tensor(
+                    diffusion.sqrt_one_minus_alphas_cumprod[cur_t],
+                    device=device,
+                    dtype=torch.float32,
+                )
+                cosine_t = alpha_sigma_to_t(alpha, sigma)
+                out = secondary_diffusion_model(x, cosine_t[None].repeat([n])).pred
+                fac = diffusion.sqrt_one_minus_alphas_cumprod[cur_t]
+                x_in = out * fac + x * (1 - fac)
+                x_in_grad = torch.zeros_like(x_in)
+            else:
+                my_t = torch.ones([n], device=device, dtype=torch.long) * cur_t
+                out = diffusion.p_mean_variance(
+                    diffusion_model, x, my_t, clip_denoised=False, model_kwargs={"y": y}
+                )
+                fac = diffusion.sqrt_one_minus_alphas_cumprod[cur_t]
+                x_in = out["pred_xstart"] * fac + x * (1 - fac)
+                x_in_grad = torch.zeros_like(x_in)
+            for model_stat in model_stats:
+                for i in range(cutn_batches):
+                    t_int = int(t.item()) + 1  # errors on last step without +1, need to find source
+                    # when using SLIP Base model the dimensions need to be hard coded to avoid AttributeError: 'VisionTransformer' object has no attribute 'input_resolution'
+                    try:
+                        input_resolution = model_stat["clip_model"].visual.input_resolution
+                    except:
+                        input_resolution = 224
+
+                    cuts = MakeCutoutsDango(
+                        input_resolution,
+                        Overview=cut_overview[1000 - t_int],
+                        InnerCrop=cut_innercut[1000 - t_int],
+                        IC_Size_Pow=cut_ic_pow,
+                        IC_Grey_P=cut_icgray_p[1000 - t_int],
+                    )
+                    clip_in = normalize(cuts(x_in.add(1).div(2)))
+                    image_embeds = model_stat["clip_model"].encode_image(clip_in).float()
+                    dists = spherical_dist_loss(
+                        image_embeds.unsqueeze(1), model_stat["target_embeds"].unsqueeze(0)
+                    )
+                    dists = dists.view(
+                        [
+                            cut_overview[1000 - t_int] + cut_innercut[1000 - t_int],
+                            n,
+                            -1,
+                        ]
+                    )
+                    losses = dists.mul(model_stat["weights"]).sum(2).mean(0)
+                    loss_values.append(
+                        losses.sum().item()
+                    )  # log loss, probably shouldn't do per cutn_batch
+                    x_in_grad += (
+                        torch.autograd.grad(losses.sum() * clip_guidance_scale, x_in)[0]
+                        / cutn_batches
+                    )
+            tv_losses = tv_loss(x_in)
+            if secondary_diffusion_model is not None:
+                range_losses = range_loss(out)
+            else:
+                range_losses = range_loss(out["pred_xstart"])
+            sat_losses = torch.abs(x_in - x_in.clamp(min=-1, max=1)).mean()
+            loss = (
+                tv_losses.sum() * tv_scale
+                + range_losses.sum() * range_scale
+                + sat_losses.sum() * sat_scale
+            )
+            if init is not None and init_scale:
+                init_losses = lpips_model(x_in, init)
+                loss = loss + init_losses.sum() * init_scale
+            x_in_grad += torch.autograd.grad(loss, x_in)[0]
+            if torch.isnan(x_in_grad).any() == False:
+                grad = -torch.autograd.grad(x_in, x, x_in_grad)[0]
+            else:
+                # print("NaN'd")
+                x_is_NaN = True
+                grad = torch.zeros_like(x)
+        if clamp_grad and x_is_NaN == False:
+            magnitude = grad.square().mean().sqrt()
+            return grad * magnitude.clamp(max=clamp_max) / magnitude  # min=-0.02, min=-clamp_max,
+        return grad
+
+    if diffusion_sampling_mode == DiffusionSamplingModeEnum.DDIM.value:
+        sample_fn = diffusion.ddim_sample_loop_progressive
+    else:
+        sample_fn = diffusion.plms_sample_loop_progressive
+    cur_t = diffusion.num_timesteps - skip_steps - 1
+
+    if diffusion_sampling_mode == DiffusionSamplingModeEnum.DDIM.value:
+        samples = sample_fn(
+            diffusion_model,
+            (batch_size, 3, side_y, side_x),
+            clip_denoised=clip_denoised,
+            model_kwargs={},
+            cond_fn=cond_fn,
+            progress=True,
+            skip_timesteps=skip_steps,
+            init_image=init,
+            randomize_class=randomize_class,
+            eta=eta,
+        )
+    else:
+        samples = sample_fn(
+            diffusion_model,
+            (batch_size, 3, side_y, side_x),
+            clip_denoised=clip_denoised,
+            model_kwargs={},
+            cond_fn=cond_fn,
+            progress=True,
+            skip_timesteps=skip_steps,
+            init_image=init,
+            randomize_class=randomize_class,
+            order=2,
+        )
+    for sample in samples:
+        cur_t -= 1
+        for image in sample["pred_xstart"]:
+            image = TF.to_pil_image(image.add(1).div(2).clamp(0, 1))
+            image.save("./output_images/progress.png")
+
+    with open(f"./output_images/progress", "rb") as f:
+        data = f.read()
+    base64_str = base64.b64encode(data).decode("utf-8")
+    clear_memory()
+    return ImageGenerationResult(text_promt=text_prompt, result=base64_str, seed=seed)
