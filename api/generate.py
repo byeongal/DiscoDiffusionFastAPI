@@ -8,7 +8,7 @@ import torchvision.transforms.functional as TF
 from fastapi import APIRouter, Request
 
 from models.generation import GenerationPayload, ImageGenerationResult
-from utils import clear_memory, set_seed, parse_prompt
+from utils import clear_memory, set_seed
 
 from config import torch_model_settings, diffusion_model_settings
 from constants import DiffusionSamplingModeEnum
@@ -77,28 +77,31 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
     seed = random.randint(0, 2**32)
     set_seed(seed)
     loss_values = []
-    target_embeds, weights = [], []
+
     frame_prompt = [text_prompt]
     model_stats = []
     for clip_model in clip_models:
-        model_stat = {"clip_model": None, "target_embeds": [], "make_cutouts": None, "weights": []}
-        model_stat["clip_model"] = clip_model
+        target_embeds, weights = [], []
+        model_stat = {
+            "clip_model": clip_model,
+            "make_cutouts": None,
+        }
 
         for prompt in frame_prompt:
-            txt, weight = parse_prompt(prompt)
-            txt = clip_model.encode_text(clip.tokenize(txt).to(device)).float()
+            weight = 1.0
+            txt = clip_model.encode_text(clip.tokenize(prompt).to(device)).float()
             if fuzzy_prompt:
                 for _ in range(25):
-                    model_stat["target_embeds"].append(
+                    target_embeds.append(
                         (txt + torch.randn(txt.shape).to(device) * rand_mag).clamp(0, 1)
                     )
-                    model_stat["weights"].append(weight)
+                    weights.append(weight)
             else:
-                model_stat["target_embeds"].append(txt)
-                model_stat["weights"].append(weight)
+                target_embeds.append(txt)
+                weights.append(weight)
 
-        model_stat["target_embeds"] = torch.cat(model_stat["target_embeds"])
-        model_stat["weights"] = torch.tensor(model_stat["weights"], device=device)
+        model_stat["target_embeds"] = torch.cat(target_embeds)
+        model_stat["weights"] = torch.tensor(weights, device=device)
         if model_stat["weights"].sum().abs() < 1e-3:
             raise RuntimeError("The weights must not sum to 0.")
         model_stat["weights"] /= model_stat["weights"].sum().abs()
@@ -108,7 +111,7 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
 
     def cond_fn(x, t, y=None):
         with torch.enable_grad():
-            x_is_NaN = False
+            x_is_nan = False
             x = x.detach().requires_grad_()
             n = x.shape[0]
             if secondary_diffusion_model is not None:
@@ -187,12 +190,12 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
                 init_losses = lpips_model(x_in, init)
                 loss = loss + init_losses.sum() * init_scale
             x_in_grad += torch.autograd.grad(loss, x_in)[0]
-            if torch.isnan(x_in_grad).any() is False:
+            if not torch.isnan(x_in_grad).any():
                 grad = -torch.autograd.grad(x_in, x, x_in_grad)[0]
             else:
-                x_is_NaN = True
+                x_is_nan = True
                 grad = torch.zeros_like(x)
-        if clamp_grad and x_is_NaN == False:
+        if clamp_grad and not x_is_nan:
             magnitude = grad.square().mean().sqrt()
             return grad * magnitude.clamp(max=clamp_max) / magnitude  # min=-0.02, min=-clamp_max,
         return grad

@@ -322,13 +322,3 @@ def split_prompts(prompts: Dict[int, List[str]], max_frames: int):
     # prompt_series = prompt_series.astype(str)
     prompt_series = prompt_series.ffill().bfill()
     return prompt_series
-
-
-def parse_prompt(prompt: str) -> Tuple[str, float]:
-    if prompt.startswith("http://") or prompt.startswith("https://"):
-        vals = prompt.rsplit(":", 2)
-        vals = [vals[0] + ":" + vals[1], *vals[2:]]
-    else:
-        vals = prompt.rsplit(":", 1)
-    vals = vals + ["", "1"][len(vals) :]
-    return vals[0], float(vals[1])
