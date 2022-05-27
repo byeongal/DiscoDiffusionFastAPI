@@ -1,21 +1,21 @@
 import random
 import base64
-from tkinter.messagebox import NO
-from loguru import logger
 
-import torch
+
 import clip
-from fastapi import APIRouter, Request
+import torch
 import torchvision.transforms.functional as TF
+from fastapi import APIRouter, Request
 
 from models.generation import GenerationPayload, ImageGenerationResult
-from utils import clear_memory, set_seed, split_prompts, parse_prompt
+from utils import clear_memory, set_seed, parse_prompt
 
 from config import torch_model_settings, diffusion_model_settings
 from constants import DiffusionSamplingModeEnum
+
 from diffusion.models import (
-    alpha_sigma_to_t,
     MakeCutoutsDango,
+    alpha_sigma_to_t,
     spherical_dist_loss,
     tv_loss,
     range_loss,
@@ -26,8 +26,8 @@ router = APIRouter()
 
 @router.post("/image")
 async def generate_image(request: Request, payload: GenerationPayload) -> ImageGenerationResult:
-    """_summary_
-
+    """
+    Return Base64 Encoded String about Image
     Args:
         payload (GenerationPayload): User Input for Generation Image
 
@@ -40,8 +40,8 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
 
     skip_steps = 10
     batch_size = 1
-    side_x = 1280
-    side_y = 768
+    side_x = 640
+    side_y = 640
     clip_denoised = False
     randomize_class = True
     eta = 0.8
@@ -134,13 +134,16 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
                 x_in = out["pred_xstart"] * fac + x * (1 - fac)
                 x_in_grad = torch.zeros_like(x_in)
             for model_stat in model_stats:
-                for i in range(cutn_batches):
+                for _ in range(cutn_batches):
                     t_int = int(t.item()) + 1  # errors on last step without +1, need to find source
                     # when using SLIP Base model the dimensions need to be hard coded to avoid AttributeError: 'VisionTransformer' object has no attribute 'input_resolution'
-                    try:
+                    input_resolution = 224
+                    if (
+                        "clip_model" in model_stat
+                        and hasattr(model_stat["clip_model"], "visual")
+                        and hasattr(model_stat["clip_model"].visual, "input_resolution")
+                    ):
                         input_resolution = model_stat["clip_model"].visual.input_resolution
-                    except:
-                        input_resolution = 224
 
                     cuts = MakeCutoutsDango(
                         input_resolution,
@@ -184,10 +187,9 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
                 init_losses = lpips_model(x_in, init)
                 loss = loss + init_losses.sum() * init_scale
             x_in_grad += torch.autograd.grad(loss, x_in)[0]
-            if torch.isnan(x_in_grad).any() == False:
+            if torch.isnan(x_in_grad).any() is False:
                 grad = -torch.autograd.grad(x_in, x, x_in_grad)[0]
             else:
-                # print("NaN'd")
                 x_is_NaN = True
                 grad = torch.zeros_like(x)
         if clamp_grad and x_is_NaN == False:
@@ -227,13 +229,14 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
             randomize_class=randomize_class,
             order=2,
         )
+    image = None
     for sample in samples:
         cur_t -= 1
         for image in sample["pred_xstart"]:
             image = TF.to_pil_image(image.add(1).div(2).clamp(0, 1))
             image.save("./output_images/progress.png")
 
-    with open(f"./output_images/progress", "rb") as f:
+    with open("./output_images/progress.png", "rb") as f:
         data = f.read()
     base64_str = base64.b64encode(data).decode("utf-8")
     clear_memory()
