@@ -12,8 +12,8 @@ import torchvision.transforms as T
 
 from loguru import logger
 
-from dependencies.guided_diffusion.guided_diffusion.gaussian_diffusion import GaussianDiffusion
-from dependencies.guided_diffusion.guided_diffusion.script_util import (
+from dependencies.guided_diffusion.gaussian_diffusion import GaussianDiffusion
+from dependencies.guided_diffusion.script_util import (
     create_model,
     create_gaussian_diffusion,
 )
