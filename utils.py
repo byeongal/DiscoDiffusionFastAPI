@@ -305,20 +305,3 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
-
-
-def split_prompts(prompts: Dict[int, List[str]], max_frames: int):
-    """_summary_
-
-    Args:
-        prompts (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    prompt_series = pd.Series([np.nan for a in range(max_frames)])
-    for i, prompt in prompts.items():
-        prompt_series[i] = prompt
-    # prompt_series = prompt_series.astype(str)
-    prompt_series = prompt_series.ffill().bfill()
-    return prompt_series
