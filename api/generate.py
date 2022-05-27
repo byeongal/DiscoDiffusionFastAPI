@@ -69,8 +69,6 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
     normalize = request.app.state.normalize
     lpips_model = request.app.state.lpips_model
 
-    # clip_models = request.app.state.clip_models
-
     # User Inputs
     text_prompt = payload.text_prompt
 
@@ -139,7 +137,6 @@ async def generate_image(request: Request, payload: GenerationPayload) -> ImageG
             for model_stat in model_stats:
                 for _ in range(cutn_batches):
                     t_int = int(t.item()) + 1  # errors on last step without +1, need to find source
-                    # when using SLIP Base model the dimensions need to be hard coded to avoid AttributeError: 'VisionTransformer' object has no attribute 'input_resolution'
                     input_resolution = 224
                     if (
                         "clip_model" in model_stat
