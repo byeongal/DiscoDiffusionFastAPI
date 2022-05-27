@@ -1,13 +1,12 @@
 import gc
 import random
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 import torch
 import clip
 import cv2
 import lpips
 import numpy as np
-import pandas as pd
 import torchvision.transforms as T
 
 from loguru import logger
