@@ -1,0 +1,49 @@
+FROM nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+USER root
+
+ENV \
+    SHELL=/bin/bash \
+    USER_GID=0 \
+    DISPLAY=:1 \
+    TERM=xterm
+
+# Install Ubuntu Package
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get update --yes && \
+    apt-get upgrade --yes && \
+    apt-get install --yes --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        ccache \
+        cmake \
+        curl \
+        git \
+        libgl1-mesa-glx \
+        libjpeg-dev \
+        libpng-dev \
+        wget && \
+    rm -rf /var/lib/apt/lists/
+ 
+
+# Install Python (mamba)
+ENV PATH /opt/conda/bin:$PATH
+
+ARG PYTHON_VERSION=3.8
+RUN curl -fsSL -v -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh  && \
+    chmod +x ~/miniconda.sh && \
+    ~/miniconda.sh -b -p /opt/conda && \
+    rm ~/miniconda.sh && \
+    conda install -y python=${PYTHON_VERSION} conda-build pyyaml numpy ipython && \
+    conda clean -ya
+
+
+COPY environment.yml ./environment.yml
+RUN conda env update --name root --file environment.yml && \
+    rm environment.yml && \
+    conda clean -ya
+WORKDIR /app
+COPY ./app /app
+
+CMD ["uvicorn", "server:app", "--reload", "--host=0.0.0.0", "--workers=0"]

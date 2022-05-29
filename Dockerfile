@@ -1,0 +1,1 @@
+FROM byeongal/disco-diffusion-fast-api-dev
